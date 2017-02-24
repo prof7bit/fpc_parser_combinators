@@ -10,6 +10,7 @@ type
   TParseResult = record
     Success: Boolean;
     Position: Integer;
+    Result: String;
   end;
 
   { TParser }
@@ -42,16 +43,10 @@ type
     function Run(Input: String; Position: Integer): TParseResult; override;
   end;
 
-  { TParsers }
 
-  TParsers = class
-    FParsers: TFPHashObjectList;
-    constructor Create;
-    destructor Destroy; override;
-    procedure Add(Name: String; Parser: TParser);
-    procedure Add(Name: String; Parser: String);
-    function Get(Name: String): TParser;
-  end;
+  procedure AddParser(Name: String; Parser: TParser);
+  procedure AddParser(Name: String; Parser: String);
+  function GetParser(Name: String): TParser;
 
   operator or(A, B: String): String;
   operator and(A, B: String): String;
@@ -59,7 +54,7 @@ type
   function Lit(S: String): String;
 
 var
-  Parsers: TParsers;
+  Parsers: TFPHashObjectList;
 
 implementation
 var
@@ -103,12 +98,13 @@ var
 begin
   Result.Success := False;
   Result.Position := Position;
-  RA := Parsers.Get(FA).Run(Input, Position);
+  RA := GetParser(FA).Run(Input, Position);
   if RA.Success then begin
-    RB := Parsers.Get(FB).Run(Input, RA.Position);
+    RB := GetParser(FB).Run(Input, RA.Position);
     if RB.Success then begin
       Result.Success := True;
       Result.Position := RB.Position;
+      Result.Result := RA.Result + RB.Result;
     end;
   end;
 end;
@@ -123,9 +119,9 @@ end;
 
 function TOrParser.Run(Input: String; Position: Integer): TParseResult;
 begin
-  Result := Parsers.Get(FA).Run(Input, Position);
+  Result := GetParser(FA).Run(Input, Position);
   if not Result.Success then
-    Result := Parsers.Get(FB).Run(Input, Position);
+    Result := GetParser(FB).Run(Input, Position);
 end;
 
 { TLitParser }
@@ -143,41 +139,29 @@ begin
     if Copy(Input, Position, Length(FLit)) = FLit then begin
       Result.Success := True;
       Result.Position := Position + Length(FLit);
+      Result.Result := FLit;
     end;
   end;
 end;
 
-{ TParsers
-  Store and retieve parsers by name}
 
-constructor TParsers.Create;
+procedure AddParser(Name: String; Parser: TParser);
 begin
-  FParsers := TFPHashObjectList.Create;
+  Parsers.Add(Name, Parser);
 end;
 
-destructor TParsers.Destroy;
+procedure AddParser(Name: String; Parser: String);
 begin
-  FParsers.Free;
-  inherited Destroy;
+  Parsers.Rename(Parser, Name);
 end;
 
-procedure TParsers.Add(Name: String; Parser: TParser);
+function GetParser(Name: String): TParser;
 begin
-  FParsers.Add(Name, Parser);
-end;
-
-procedure TParsers.Add(Name: String; Parser: String);
-begin
-  FParsers.Rename(Parser, Name);
-end;
-
-function TParsers.Get(Name: String): TParser;
-begin
-  Result := TParser(FParsers.Find(Name));
+  Result := TParser(Parsers.Find(Name));
 end;
 
 initialization
-  Parsers := TParsers.Create;
+  Parsers := TFPHashObjectList.Create;
 finalization
   Parsers.Free;
 end.
