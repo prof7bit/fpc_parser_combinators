@@ -4,7 +4,7 @@ unit parsers2;
 
 interface
 uses
-  Classes, SysUtils, contnrs;
+  Classes, SysUtils;
 
 type
   TParseResult = record
@@ -23,6 +23,13 @@ type
     PostMeth: TPostMeth;
     function Run(Input: String; Position: Integer): TParseResult; virtual; abstract;
     procedure RunPostProc(var Result: TParseResult);
+  end;
+
+  { TParserForwardDeclaration }
+
+  TParserForwardDeclaration = class(TParser)
+    Impl: TParser;
+    function Run(Input: String; Position: Integer): TParseResult; override;
   end;
 
   { TLitParser }
@@ -54,81 +61,58 @@ type
   { TOrParser }
 
   TOrParser = class(TParser)
-    FA, FB: String;
-    constructor Create(A, B: String);
+    FA, FB: TParser;
+    constructor Create(A, B: TParser);
     function Run(Input: String; Position: Integer): TParseResult; override;
   end;
 
   { TAndParser }
 
   TAndParser = class(TParser)
-    FA, FB: String;
-    constructor Create(A, B: String);
+    FA, FB: TParser;
+    constructor Create(A, B: TParser);
     function Run(Input: String; Position: Integer): TParseResult; override;
   end;
 
 
-  procedure AddParser(Name: String; Parser: TParser);
-  procedure AddParser(Name: String; Parser: String);
-  function GetParser(Name: String): TParser;
+  operator or(A, B: TParser): TParser;
+  operator and(A, B: TParser): TParser;
 
-  operator or(A, B: String): String;
-  operator and(A, B: String): String;
-
-  function Lit(S: String): String;
-  function White: String;
-  function Sym(S: String): String;
-  function Num: String;
-
-var
-  Parsers: TFPHashObjectList;
+  function Lit(S: String): TParser;
+  function White: TParser;
+  function Sym(S: String): TParser;
+  function Num: TParser;
 
 implementation
-var
-  Count: Integer = 0;
 
-function UniqueName: String;
+operator or(A, B: TParser): TParser;
 begin
-  Result := IntToHex(Count, 8);
-  Inc(Count);
+  Result := TOrParser.Create(A, B);
 end;
 
-operator or(A, B: String): String;
+operator and(A, B: TParser): TParser;
 begin
-  Result := UniqueName;
-  Parsers.Add(Result, TOrParser.Create(A, B));
+  Result := TAndParser.Create(A, B);
 end;
 
-operator and(A, B: String): String;
+function Lit(S: String): TParser;
 begin
-  Result := UniqueName;
-  Parsers.Add(Result, TAndParser.Create(A, B));
+  Result := TLitParser.Create(S);
 end;
 
-function Lit(S: String): String;
+function White: TParser;
 begin
-  Result := UniqueName;
-  Parsers.Add(Result, TLitParser.Create(S));
+  Result := TWhitespaceParser.Create;
 end;
 
-function White: String;
-begin
-  Result := UniqueName;
-  Parsers.Add(Result, TWhitespaceParser.Create);
-end;
-
-function Sym(S: String): String;
+function Sym(S: String): TParser;
 begin
   Result := White and Lit(S);
 end;
 
-function Num: String;
-var
-  N: String;
+function Num: TParser;
 begin
-  N := UniqueName;
-  AddParser(N, TNumberParser.Create);
-  Result := White and N;
+  Result := White and TNumberParser.Create;
 end;
 
 function StringArray(A: String): TStringArray;
@@ -146,6 +130,18 @@ begin
     Result[I] := A[I];
   for I := 0 to Length(B) - 1 do
     Result[Length(A) + I] := B[I];
+end;
+
+{ TParserForwardDeclaration
+  use this as a placeholder parser if the grammar has recursive references,
+  you can then later assign to Impl a reference to the actual parser object }
+
+function TParserForwardDeclaration.Run(Input: String; Position: Integer): TParseResult;
+begin
+  if not Assigned(Impl) then
+    raise Exception.Create('placeholder-parser is empty');
+  Result := Impl.Run(Input, Position);
+  RunPostProc(Result);
 end;
 
 { TNumberParser }
@@ -202,7 +198,7 @@ end;
 
 { TAndParser }
 
-constructor TAndParser.Create(A, B: String);
+constructor TAndParser.Create(A, B: TParser);
 begin
   FA := A;
   FB := B;
@@ -214,9 +210,9 @@ var
 begin
   Result.Success := False;
   Result.Position := Position;
-  RA := GetParser(FA).Run(Input, Position);
+  RA := FA.Run(Input, Position);
   if RA.Success then begin
-    RB := GetParser(FB).Run(Input, RA.Position);
+    RB := FB.Run(Input, RA.Position);
     if RB.Success then begin
       Result.Success := True;
       Result.Position := RB.Position;
@@ -228,7 +224,7 @@ end;
 
 { TOrParser }
 
-constructor TOrParser.Create(A, B: String);
+constructor TOrParser.Create(A, B: TParser);
 begin
   FA := A;
   FB := B;
@@ -236,9 +232,9 @@ end;
 
 function TOrParser.Run(Input: String; Position: Integer): TParseResult;
 begin
-  Result := GetParser(FA).Run(Input, Position);
+  Result := FA.Run(Input, Position);
   if not Result.Success then
-    Result := GetParser(FB).Run(Input, Position);
+    Result := FB.Run(Input, Position);
   if Result.Success then
     RunPostProc(Result);
 end;
@@ -264,27 +260,5 @@ begin
   end;
 end;
 
-
-procedure AddParser(Name: String; Parser: TParser);
-begin
-  Parsers.Add(Name, Parser);
-end;
-
-procedure AddParser(Name: String; Parser: String);
-begin
-  Parsers.Rename(Parser, Name);
-end;
-
-function GetParser(Name: String): TParser;
-begin
-  Result := TParser(Parsers.Find(Name));
-  if not Assigned(Result) then
-    raise Exception.Create('there is no parser named ' + Name);
-end;
-
-initialization
-  Parsers := TFPHashObjectList.Create;
-finalization
-  Parsers.Free;
 end.
 

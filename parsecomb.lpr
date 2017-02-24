@@ -46,23 +46,37 @@ end;
 
 var
   I: Integer;
+  EXPR, PARENS, INNER, MULFUNC, ADDFUNC: TParser;
+  _PARENS: TParserForwardDeclaration;
 
 begin
-  AddParser('EXPR',     Num or 'PARENS');
-  AddParser('PARENS',   Sym('(') and 'INNER' and Sym(')'));
-  AddParser('INNER',    'MULFUNC' or 'ADDFUNC' or Num);
-  AddParser('MULFUNC',  Sym('mul') and 'EXPR' and 'EXPR');
-  AddParser('ADDFUNC',  Sym('add') and 'EXPR' and 'EXPR');
+  // there is recursion in the grammar, so
+  // we need a placeholder (kind of like a
+  // forward declaration)
+  _PARENS := TParserForwardDeclaration.Create;
 
-  GetParser('EXPR').PostProc := @ProcExpr;
-  GetParser('ADDFUNC').PostProc := @ProcAdd;
-  GetParser('MULFUNC').PostProc := @ProcMul;
+  // define the grammar by combining many smaller
+  // simple parsers to one big complex parser
+  EXPR      := Num or _PARENS;
+  MULFUNC   := Sym('mul') and EXPR and EXPR;
+  ADDFUNC   := Sym('add') and EXPR and EXPR;
+  INNER     := MULFUNC or ADDFUNC or Num;
+  PARENS    := Sym('(') and INNER and Sym(')');
 
-  // time: 2.48s
+  // now solve the forward declaration, close the circle
+  _PARENS.Impl := PARENS;
+
+  // some of the above parsers need to perform
+  // some action, otherwise it would be boring.
+  EXPR.PostProc := @ProcExpr;
+  ADDFUNC.PostProc := @ProcAdd;
+  MULFUNC.PostProc := @ProcMul;
+
+  // time: 1.60s
   for I := 1 to 100000 do begin
-    GetParser('EXPR').Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1);
+    EXPR.Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1);
   end;
 
-  Print(GetParser('EXPR').Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1));
+  Print(EXPR.Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1));
 end.
 
