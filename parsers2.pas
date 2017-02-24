@@ -10,13 +10,19 @@ type
   TParseResult = record
     Success: Boolean;
     Position: Integer;
-    Result: String;
+    Result: TStringArray;
   end;
+
+  TPostProc = procedure(var Result: TParseResult);
+  TPostMeth = procedure(var Result: TParseResult) of object;
 
   { TParser }
 
   TParser = class
+    PostProc: TPostProc;
+    PostMeth: TPostMeth;
     function Run(Input: String; Position: Integer): TParseResult; virtual; abstract;
+    procedure RunPostProc(var Result: TParseResult);
   end;
 
   { TLitParser }
@@ -84,6 +90,31 @@ begin
   Parsers.Add(Result, TLitParser.Create(S));
 end;
 
+function StringArray(A: String): TStringArray;
+begin
+  SetLength(Result, 1);
+  Result[0] := A;
+end;
+
+function StringArray(A, B: TStringArray): TStringArray;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(A) + Length(B));
+  for I := 0 to Length(A) - 1 do
+    Result[I] := A[I];
+  for I := 0 to Length(B) - 1 do
+    Result[Length(A) + I] := B[I];
+end;
+
+{ TParser }
+
+procedure TParser.RunPostProc(var Result: TParseResult);
+begin
+  if Assigned(PostProc) then PostProc(Result);
+  if Assigned(PostMeth) then PostMeth(Result);
+end;
+
 { TAndParser }
 
 constructor TAndParser.Create(A, B: String);
@@ -104,7 +135,8 @@ begin
     if RB.Success then begin
       Result.Success := True;
       Result.Position := RB.Position;
-      Result.Result := RA.Result + RB.Result;
+      Result.Result := StringArray(RA.Result, RB.Result);
+      RunPostProc(Result);
     end;
   end;
 end;
@@ -122,6 +154,8 @@ begin
   Result := GetParser(FA).Run(Input, Position);
   if not Result.Success then
     Result := GetParser(FB).Run(Input, Position);
+  if Result.Success then
+    RunPostProc(Result);
 end;
 
 { TLitParser }
@@ -139,7 +173,8 @@ begin
     if Copy(Input, Position, Length(FLit)) = FLit then begin
       Result.Success := True;
       Result.Position := Position + Length(FLit);
-      Result.Result := FLit;
+      Result.Result := StringArray(FLit);
+      RunPostProc(Result);
     end;
   end;
 end;
