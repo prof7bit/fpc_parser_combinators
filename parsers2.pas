@@ -33,6 +33,24 @@ type
     function Run(Input: String; Position: Integer): TParseResult; override;
   end;
 
+  { TWhitespaceParser }
+
+  TWhitespaceParser = class(TParser)
+    function Run(Input: String; Position: Integer): TParseResult; override;
+  end;
+
+  { TNumberParser }
+
+  TNumberParser = class(TParser)
+    function Run(Input: String; Position: Integer): TParseResult; override;
+  end;
+
+  { TDigitParser }
+
+  TDigitParser = class(TParser)
+    function Run(Input: String; Position: Integer): TParseResult; override;
+  end;
+
   { TOrParser }
 
   TOrParser = class(TParser)
@@ -58,6 +76,9 @@ type
   operator and(A, B: String): String;
 
   function Lit(S: String): String;
+  function White: String;
+  function Sym(S: String): String;
+  function Num: String;
 
 var
   Parsers: TFPHashObjectList;
@@ -90,6 +111,26 @@ begin
   Parsers.Add(Result, TLitParser.Create(S));
 end;
 
+function White: String;
+begin
+  Result := UniqueName;
+  Parsers.Add(Result, TWhitespaceParser.Create);
+end;
+
+function Sym(S: String): String;
+begin
+  Result := White and Lit(S);
+end;
+
+function Num: String;
+var
+  N: String;
+begin
+  N := UniqueName;
+  AddParser(N, TNumberParser.Create);
+  Result := White and N;
+end;
+
 function StringArray(A: String): TStringArray;
 begin
   SetLength(Result, 1);
@@ -105,6 +146,50 @@ begin
     Result[I] := A[I];
   for I := 0 to Length(B) - 1 do
     Result[Length(A) + I] := B[I];
+end;
+
+{ TNumberParser }
+
+function TNumberParser.Run(Input: String; Position: Integer): TParseResult;
+begin
+  Result.Position := Position;
+  Result.Success := False;
+  repeat
+    if not (Input[Result.Position] in ['0'..'9']) then
+      break;
+    Inc(Result.Position);
+    Result.Success := True;
+  until Result.Position > Length(Input);
+  if Result.Success then begin
+    Result.Result := StringArray(Copy(Input, Position, Result.Position - Position));
+    RunPostProc(Result);
+  end;
+end;
+
+
+{ TDigitParser }
+
+function TDigitParser.Run(Input: String; Position: Integer): TParseResult;
+begin
+  if Input[Position] in ['0'..'9'] then begin
+    Result.Success := True;
+    Result.Position := Position + 1;
+    Result.Result := StringArray(Input[Position]);
+  end;
+end;
+
+{ TWhitespaceParser }
+
+function TWhitespaceParser.Run(Input: String; Position: Integer): TParseResult;
+begin
+  Result.Position := Position;
+  repeat
+    if not (Input[Result.Position] in [' ', #9, #10, #13]) then
+      break;
+    Inc(Result.Position);
+  until Result.Position > Length(Input);
+  Result.Success := True;
+  RunPostProc(Result);
 end;
 
 { TParser }
@@ -193,6 +278,8 @@ end;
 function GetParser(Name: String): TParser;
 begin
   Result := TParser(Parsers.Find(Name));
+  if not Assigned(Result) then
+    raise Exception.Create('there is no parser named ' + Name);
 end;
 
 initialization

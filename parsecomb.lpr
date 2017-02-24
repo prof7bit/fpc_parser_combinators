@@ -16,39 +16,46 @@ begin
     WriteLn(S);
 end;
 
-procedure PostProcExpr(var Result: TParseResult);
-var
-  A, B: Integer;
+procedure ProcExpr(var R: TParseResult);
 begin
-  A := StrToInt(Result.Result[3]);
-  B := StrToInt(Result.Result[5]);
-  if Result.Result[1] = 'add' then begin
-    WriteLn('processing addition');
-    SetLength(Result.Result, 1);
-    Result.Result[0] := IntToStr(A + B);
-  end
-  else if Result.Result[1] = 'mul' then begin
-    WriteLn('processing multiplication');
-    SetLength(Result.Result, 1);
-    Result.Result[0] := IntToStr(A * B);
+  if Length(R.Result) = 3 then begin
+    // the array is [ '(', value, ')' ]
+    // remove parens and shrink array
+    R.Result[0] := R.Result[1];
+    SetLength(R.Result, 1);
   end;
 end;
 
-procedure Main;
-
+procedure ProcAdd(var R: TParseResult);
 begin
-  AddParser('expr',    Lit('(') and 'inner' and Lit(')'));
-  AddParser('inner',   'oper' and 'arg' and 'arg');
-  AddParser('oper',    Lit('add') or Lit('mul') or 'expr');
-  AddParser('arg',     Lit(' ') and ('digit' or 'expr'));
-  AddParser('digit',   Lit('0') or Lit('1') or Lit('2') or Lit('3'));
-
-  GetParser('expr').PostProc := @PostProcExpr;
-
-  Print(GetParser('expr').Run('(mul (add (add 2 2) (mul 2 2)) 3)', 1));
+  // the array is [ 'add', a, b ]
+  // replace it with an array
+  // containing only the sum
+  R.Result[0] := IntToStr(StrToInt(R.Result[1]) + StrToInt(R.Result[2]));
+  SetLength(R.Result, 1);
 end;
 
+procedure ProcMul(var R: TParseResult);
 begin
-  Main;
+  // the array is [ 'mul', a, b ]
+  // replace it with an array
+  // containing only the product
+  R.Result[0] := IntToStr(StrToInt(R.Result[1]) * StrToInt(R.Result[2]));
+  SetLength(R.Result, 1);
+end;
+
+
+begin
+  AddParser('EXPR',     Num or 'PARENS');
+  AddParser('PARENS',   Sym('(') and 'INNER' and Sym(')'));
+  AddParser('INNER',    'MULFUNC' or 'ADDFUNC' or Num);
+  AddParser('MULFUNC',  Sym('mul') and 'EXPR' and 'EXPR');
+  AddParser('ADDFUNC',  Sym('add') and 'EXPR' and 'EXPR');
+
+  GetParser('EXPR').PostProc := @ProcExpr;
+  GetParser('ADDFUNC').PostProc := @ProcAdd;
+  GetParser('MULFUNC').PostProc := @ProcMul;
+
+  Print(GetParser('EXPR').Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1));
 end.
 
