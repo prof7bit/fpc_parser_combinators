@@ -3,7 +3,7 @@ program parsecomb;
 {$mode objfpc}{$H+}
 
 uses
-  Classes, sysutils, parsers2;
+  Classes, sysutils, parsercombinators;
 
 procedure Print(Res: TParseResult);
 var
@@ -45,25 +45,25 @@ begin
 end;
 
 var
+  A: String;
+  R: TParseResult;
   I: Integer;
   EXPR, PARENS, INNER, MULFUNC, ADDFUNC: TParser;
   _PARENS: TParserForwardDeclaration;
 
 begin
-  // there is recursion in the grammar, so
-  // we need a placeholder (kind of like a
-  // forward declaration)
+  // there is recursion in the grammar, so we need a placeholder
+  // (kind of like a forward declaration)
   _PARENS := TParserForwardDeclaration.Create;
 
-  // define the grammar by combining many smaller
-  // simple parsers to one big complex parser
+  // define the grammar
   EXPR      := Num or _PARENS;
   MULFUNC   := Sym('mul') and EXPR and EXPR;
   ADDFUNC   := Sym('add') and EXPR and EXPR;
   INNER     := MULFUNC or ADDFUNC or Num;
   PARENS    := Sym('(') and INNER and Sym(')');
 
-  // now solve the forward declaration, close the circle
+  // solve the forward declaration, closing the circle
   _PARENS.Impl := PARENS;
 
   // some of the above parsers need to perform
@@ -72,11 +72,12 @@ begin
   ADDFUNC.PostProc := @ProcAdd;
   MULFUNC.PostProc := @ProcMul;
 
-  // time: 1.60s
-  for I := 1 to 100000 do begin
-    EXPR.Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1);
-  end;
-
   Print(EXPR.Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1));
+  repeat
+    WriteLn('try it yourself! Type something that evals to 42 to quit');
+    ReadLn(A);
+    R := EXPR.Run(A, 1);
+    Print(R);
+  until R.Success and (R.Result[0] = '42');
 end.
 

@@ -1,4 +1,4 @@
-unit parsers2;
+unit parsercombinators;
 
 {$mode objfpc}{$H+}
 
