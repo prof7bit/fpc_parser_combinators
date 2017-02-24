@@ -1,3 +1,10 @@
+{ experimantal parser combinator framework
+  with runnables instead of lambdas to see
+  how far object pascal can be pushed
+
+  dedicated to the public domain,
+  prof7bit@gmail.com
+}
 unit parsercombinators;
 
 {$mode objfpc}{$H+}

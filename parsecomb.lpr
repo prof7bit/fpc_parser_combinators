@@ -1,3 +1,10 @@
+{ experimantal parser combinator demo
+  with runnables instead of lambdas to see
+  how far object pascal can be pushed
+
+  dedicated to the public domain,
+  prof7bit@gmail.com
+}
 program parsecomb;
 
 {$mode objfpc}{$H+}
