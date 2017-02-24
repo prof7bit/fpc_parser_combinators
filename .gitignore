@@ -1,0 +1,7 @@
+*.lps
+*.dbg
+*.swp
+parsecomb
+backup
+lib
+
