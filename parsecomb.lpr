@@ -44,6 +44,8 @@ begin
   SetLength(R.Result, 1);
 end;
 
+var
+  I: Integer;
 
 begin
   AddParser('EXPR',     Num or 'PARENS');
@@ -55,6 +57,11 @@ begin
   GetParser('EXPR').PostProc := @ProcExpr;
   GetParser('ADDFUNC').PostProc := @ProcAdd;
   GetParser('MULFUNC').PostProc := @ProcMul;
+
+  // time: 2.48s
+  for I := 1 to 100000 do begin
+    GetParser('EXPR').Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1);
+  end;
 
   Print(GetParser('EXPR').Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1));
 end.
