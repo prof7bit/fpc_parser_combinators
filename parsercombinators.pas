@@ -23,24 +23,26 @@ type
   TPostProc = procedure(var Result: TParseResult);
   TPostMeth = procedure(var Result: TParseResult) of object;
 
-  IParser = interface
-    procedure SetPostProc(P: TPostProc);
-    procedure SetPostMeth(P: TPostMeth);
-    procedure SetImplementation(Impl: IParser);
-    function Run(Input: String; Position: Integer): TParseResult;
-  end;
-
   { TParser }
 
-  TParser = class(TInterfacedObject, IParser)
+  TParser = class
     FPostProc: TPostProc;
     FPostMeth: TPostMeth;
-    FImpl: IParser;
+    FImpl: TParser;
     procedure SetPostProc(P: TPostProc);
     procedure SetPostMeth(P: TPostMeth);
-    procedure SetImplementation(Impl: IParser);
+    procedure SetImplementation(Impl: TParser);
     function Run(Input: String; Position: Integer): TParseResult; virtual;
     procedure RunPostProc(var Result: TParseResult);
+    destructor Destroy; override;
+  end;
+
+  { TTwoParsers }
+
+  TTwoParsers = class(TParser)
+    FA: TParser;
+    FB: TParser;
+    destructor Destroy; override;
   end;
 
   { TLitParser }
@@ -71,57 +73,66 @@ type
 
   { TOrParser }
 
-  TOrParser = class(TParser)
-    FA, FB: IParser;
-    constructor Create(A, B: IParser);
+  TOrParser = class(TTwoParsers)
+    constructor Create(A, B: TParser);
     function Run(Input: String; Position: Integer): TParseResult; override;
   end;
 
   { TAndParser }
 
-  TAndParser = class(TParser)
-    FA, FB: IParser;
-    constructor Create(A, B: IParser);
+  TAndParser = class(TTwoParsers)
+    constructor Create(A, B: TParser);
     function Run(Input: String; Position: Integer): TParseResult; override;
   end;
 
 
-  operator or(A, B: IParser): IParser;
-  operator and(A, B: IParser): IParser;
+  operator or(A, B: TParser): TParser;
+  operator and(A, B: TParser): TParser;
 
-  function Lit(S: String): IParser;
-  function White: IParser;
-  function Sym(S: String): IParser;
-  function Num: IParser;
+  function Lit(S: String): TParser;
+  function White: TParser;
+  function Sym(S: String): TParser;
+  function Num: TParser;
 
 implementation
 
-operator or(A, B: IParser): IParser;
+procedure TryFree(var P: TParser);
+begin
+  if Assigned(P) then begin
+    try
+      P.Free;
+    except
+    end;
+    P := nil;
+  end;
+end;
+
+operator or(A, B: TParser): TParser;
 begin
   Result := TOrParser.Create(A, B);
 end;
 
-operator and(A, B: IParser): IParser;
+operator and(A, B: TParser): TParser;
 begin
   Result := TAndParser.Create(A, B);
 end;
 
-function Lit(S: String): IParser;
+function Lit(S: String): TParser;
 begin
   Result := TLitParser.Create(S);
 end;
 
-function White: IParser;
+function White: TParser;
 begin
   Result := TWhitespaceParser.Create;
 end;
 
-function Sym(S: String): IParser;
+function Sym(S: String): TParser;
 begin
   Result := White and Lit(S);
 end;
 
-function Num: IParser;
+function Num: TParser;
 begin
   Result := White and TNumberParser.Create;
 end;
@@ -141,6 +152,15 @@ begin
     Result[I] := A[I];
   for I := 0 to Length(B) - 1 do
     Result[Length(A) + I] := B[I];
+end;
+
+{ TTwoParsers }
+
+destructor TTwoParsers.Destroy;
+begin
+  TryFree(FA);
+  TryFree(FB);
+  inherited Destroy;
 end;
 
 { TNumberParser }
@@ -199,7 +219,7 @@ begin
   FPostMeth := P;
 end;
 
-procedure TParser.SetImplementation(Impl: IParser);
+procedure TParser.SetImplementation(Impl: TParser);
 begin
   FImpl := Impl;
 end;
@@ -218,9 +238,14 @@ begin
   if Assigned(FPostMeth) then FPostMeth(Result);
 end;
 
+destructor TParser.Destroy;
+begin
+  TryFree(FImpl);
+end;
+
 { TAndParser }
 
-constructor TAndParser.Create(A, B: IParser);
+constructor TAndParser.Create(A, B: TParser);
 begin
   FA := A;
   FB := B;
@@ -246,7 +271,7 @@ end;
 
 { TOrParser }
 
-constructor TOrParser.Create(A, B: IParser);
+constructor TOrParser.Create(A, B: TParser);
 begin
   FA := A;
   FB := B;

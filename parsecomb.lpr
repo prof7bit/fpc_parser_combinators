@@ -10,7 +10,7 @@ program parsecomb;
 {$mode objfpc}{$H+}
 
 uses
-  //heaptrc,
+  heaptrc,
   Classes, sysutils, parsercombinators;
 
 procedure Print(Res: TParseResult);
@@ -55,7 +55,7 @@ end;
 var
   A: String;
   R: TParseResult;
-  EXPR, PARENS, INNER, MULFUNC, ADDFUNC, _PARENS: IParser;
+  EXPR, PARENS, INNER, MULFUNC, ADDFUNC, _PARENS: TParser;
 
 begin
   // there is recursion in the grammar, so we need a
@@ -86,9 +86,6 @@ begin
     Print(R);
   until R.Success and (R.Result[0] = '42');
 
-  // break the cyclic reference in the parser tree, otherwise
-  // the reference counting can not garbage collect most of the
-  // parsers and memory will be leaked.
-  _PARENS.SetImplementation(nil);
+  EXPR.Free;
 end.
 
