@@ -90,6 +90,10 @@ begin
     Print(R);
   until R.Success and (R.Result[0] = '42');
 
+  // freeing the root of the parser tree will free all
+  // contained parsers recursively, even in the presence
+  // of cyclic references, heaptrc should indicate no
+  // leaks anymore after the call below
   EXPR.Free;
 end.
 
