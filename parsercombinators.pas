@@ -29,6 +29,8 @@ type
     FPostProc: TPostProc;
     FPostMeth: TPostMeth;
     FImpl: TParser;
+    FDestroying: Boolean;
+    function IsDestroying: Boolean;
     procedure SetPostProc(P: TPostProc);
     procedure SetPostMeth(P: TPostMeth);
     procedure SetImplementation(Impl: TParser);
@@ -42,6 +44,7 @@ type
   TTwoParsers = class(TParser)
     FA: TParser;
     FB: TParser;
+    constructor Create(A, B: TParser);
     destructor Destroy; override;
   end;
 
@@ -74,14 +77,12 @@ type
   { TOrParser }
 
   TOrParser = class(TTwoParsers)
-    constructor Create(A, B: TParser);
     function Run(Input: String; Position: Integer): TParseResult; override;
   end;
 
   { TAndParser }
 
   TAndParser = class(TTwoParsers)
-    constructor Create(A, B: TParser);
     function Run(Input: String; Position: Integer): TParseResult; override;
   end;
 
@@ -98,11 +99,8 @@ implementation
 
 procedure TryFree(var P: TParser);
 begin
-  if Assigned(P) then begin
-    try
-      P.Free;
-    except
-    end;
+  if Assigned(P) and not P.IsDestroying then begin
+    P.Free;
     P := nil;
   end;
 end;
@@ -156,8 +154,15 @@ end;
 
 { TTwoParsers }
 
+constructor TTwoParsers.Create(A, B: TParser);
+begin
+  FA := A;
+  FB := B;
+end;
+
 destructor TTwoParsers.Destroy;
 begin
+  FDestroying := True;
   TryFree(FA);
   TryFree(FB);
   inherited Destroy;
@@ -209,6 +214,11 @@ end;
 
 { TParser }
 
+function TParser.IsDestroying: Boolean;
+begin
+  Result := FDestroying;
+end;
+
 procedure TParser.SetPostProc(P: TPostProc);
 begin
   FPostProc := P;
@@ -240,16 +250,11 @@ end;
 
 destructor TParser.Destroy;
 begin
+  FDestroying := True;
   TryFree(FImpl);
 end;
 
 { TAndParser }
-
-constructor TAndParser.Create(A, B: TParser);
-begin
-  FA := A;
-  FB := B;
-end;
 
 function TAndParser.Run(Input: String; Position: Integer): TParseResult;
 var
@@ -270,12 +275,6 @@ begin
 end;
 
 { TOrParser }
-
-constructor TOrParser.Create(A, B: TParser);
-begin
-  FA := A;
-  FB := B;
-end;
 
 function TOrParser.Run(Input: String; Position: Integer): TParseResult;
 begin

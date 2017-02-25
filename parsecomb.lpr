@@ -10,7 +10,7 @@ program parsecomb;
 {$mode objfpc}{$H+}
 
 uses
-  heaptrc,
+  //heaptrc,
   Classes, sysutils, parsercombinators;
 
 procedure Print(Res: TParseResult);
@@ -78,9 +78,13 @@ begin
   ADDFUNC.SetPostProc(@ProcAdd);
   MULFUNC.SetPostProc(@ProcMul);
 
-  Print(EXPR.Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1));
+  R := EXPR.Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1);
+  Assert(R.Success);
+  Assert(Length(R.Result) = 1);
+  Assert(R.Result[0] = '7004');
+
   repeat
-    WriteLn('try it yourself! Type something that evals to 42 to quit');
+    WriteLn('Type something that evals to 42 to quit');
     ReadLn(A);
     R := EXPR.Run(A, 1);
     Print(R);
