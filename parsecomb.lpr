@@ -10,7 +10,8 @@ program parsecomb;
 {$mode objfpc}{$H+}
 
 uses
-  heaptrc, Classes, sysutils, parsercombinators;
+  //heaptrc,
+  Classes, sysutils, parsercombinators;
 
 procedure Print(Res: TParseResult);
 var
