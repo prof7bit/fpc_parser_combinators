@@ -11,13 +11,13 @@ unit parsercombinators;
 
 interface
 uses
-  Classes, SysUtils;
+  Classes, SysUtils, variants;
 
 type
   TParseResult = record
     Success: Boolean;
     Position: Integer;
-    Result: TStringArray;
+    Result: Variant;
   end;
 
   TPostProc = procedure(var Result: TParseResult);
@@ -97,6 +97,57 @@ type
 
 implementation
 
+{ helper functions }
+
+function VarArrayLength(V: Variant): Integer;
+begin
+  if VarIsArray(V) then
+    Result := VarArrayHighBound(V, 1) - VarArrayLowBound(V, 1) + 1
+  else
+    raise Exception.Create('trying to get the length of a non-array');
+end;
+
+procedure VarArraySetLength(var V: Variant; Len: Integer);
+begin
+  if VarIsArray(V) then
+    VarArrayRedim(V, Len - 1)
+  else
+    raise Exception.Create('trying to set the length of a non-array');
+end;
+
+function VarArrayConcat(A, B: Variant): Variant;
+var
+  LenA, LenB: Integer;
+  I: Integer;
+begin
+  if VarIsEmpty(A) then
+    Result := B
+  else if VarIsEmpty(B) then
+    Result := A
+  else begin
+    if VarIsArray(A) then begin
+      Result := A;
+      LenA := VarArrayLength(A);
+    end
+    else begin
+      Result := VarArrayCreate([0, 0], varvariant);
+      Result[0] := A;
+      LenA := 1;
+    end;
+
+    if VarIsArray(B) then begin
+      LenB := VarArrayLength(B);
+      VarArraySetLength(Result, LenA + LenB);
+      for I := 0 to LenB - 1 do
+        Result[LenA + I] := B[I];
+    end
+    else begin
+      VarArraySetLength(Result, LenA + 1);
+      Result[LenA] := B;
+    end;
+  end;
+end;
+
 procedure TryFree(var P: TParser);
 begin
   if Assigned(P) and not P.IsDestroying then begin
@@ -133,83 +184,6 @@ end;
 function Num: TParser;
 begin
   Result := White and TNumberParser.Create;
-end;
-
-function StringArray(A: String): TStringArray;
-begin
-  SetLength(Result, 1);
-  Result[0] := A;
-end;
-
-function StringArray(A, B: TStringArray): TStringArray;
-var
-  I: Integer;
-begin
-  SetLength(Result, Length(A) + Length(B));
-  for I := 0 to Length(A) - 1 do
-    Result[I] := A[I];
-  for I := 0 to Length(B) - 1 do
-    Result[Length(A) + I] := B[I];
-end;
-
-{ TTwoParsers }
-
-constructor TTwoParsers.Create(A, B: TParser);
-begin
-  FA := A;
-  FB := B;
-end;
-
-destructor TTwoParsers.Destroy;
-begin
-  FDestroying := True;
-  TryFree(FA);
-  TryFree(FB);
-  inherited Destroy;
-end;
-
-{ TNumberParser }
-
-function TNumberParser.Run(Input: String; Position: Integer): TParseResult;
-begin
-  Result.Position := Position;
-  Result.Success := False;
-  repeat
-    if not (Input[Result.Position] in ['0'..'9']) then
-      break;
-    Inc(Result.Position);
-    Result.Success := True;
-  until Result.Position > Length(Input);
-  if Result.Success then begin
-    Result.Result := StringArray(Copy(Input, Position, Result.Position - Position));
-    RunPostProc(Result);
-  end;
-end;
-
-
-{ TDigitParser }
-
-function TDigitParser.Run(Input: String; Position: Integer): TParseResult;
-begin
-  if Input[Position] in ['0'..'9'] then begin
-    Result.Success := True;
-    Result.Position := Position + 1;
-    Result.Result := StringArray(Input[Position]);
-  end;
-end;
-
-{ TWhitespaceParser }
-
-function TWhitespaceParser.Run(Input: String; Position: Integer): TParseResult;
-begin
-  Result.Position := Position;
-  repeat
-    if not (Input[Result.Position] in [' ', #9, #10, #13]) then
-      break;
-    Inc(Result.Position);
-  until Result.Position > Length(Input);
-  Result.Success := True;
-  RunPostProc(Result);
 end;
 
 { TParser }
@@ -254,6 +228,67 @@ begin
   TryFree(FImpl);
 end;
 
+{ TTwoParsers }
+
+constructor TTwoParsers.Create(A, B: TParser);
+begin
+  FA := A;
+  FB := B;
+end;
+
+destructor TTwoParsers.Destroy;
+begin
+  FDestroying := True;
+  TryFree(FA);
+  TryFree(FB);
+  inherited Destroy;
+end;
+
+{ TNumberParser }
+
+function TNumberParser.Run(Input: String; Position: Integer): TParseResult;
+begin
+  Result.Position := Position;
+  Result.Success := False;
+  repeat
+    if not (Input[Result.Position] in ['0'..'9']) then
+      break;
+    Inc(Result.Position);
+    Result.Success := True;
+  until Result.Position > Length(Input);
+  if Result.Success then begin
+    Result.Result := StrToInt(Copy(Input, Position, Result.Position - Position));
+    RunPostProc(Result);
+  end;
+end;
+
+
+{ TDigitParser }
+
+function TDigitParser.Run(Input: String; Position: Integer): TParseResult;
+begin
+  if Input[Position] in ['0'..'9'] then begin
+    Result.Success := True;
+    Result.Position := Position + 1;
+    Result.Result := StrToInt(Input[Position]);
+  end;
+end;
+
+{ TWhitespaceParser }
+
+function TWhitespaceParser.Run(Input: String; Position: Integer): TParseResult;
+begin
+  Result.Position := Position;
+  repeat
+    if not (Input[Result.Position] in [' ', #9, #10, #13]) then
+      break;
+    Inc(Result.Position);
+  until Result.Position > Length(Input);
+  Result.Success := True;
+  Result.Result := Unassigned;
+  RunPostProc(Result);
+end;
+
 { TAndParser }
 
 function TAndParser.Run(Input: String; Position: Integer): TParseResult;
@@ -268,7 +303,8 @@ begin
     if RB.Success then begin
       Result.Success := True;
       Result.Position := RB.Position;
-      Result.Result := StringArray(RA.Result, RB.Result);
+      //WriteLn('a: ', FA.ClassName, ' ',  RA.Result, ' b: ', FB.ClassName, ' ', RB.Result);
+      Result.Result := VarArrayConcat(RA.Result, RB.Result);
       RunPostProc(Result);
     end;
   end;
@@ -300,7 +336,7 @@ begin
     if Copy(Input, Position, Length(FLit)) = FLit then begin
       Result.Success := True;
       Result.Position := Position + Length(FLit);
-      Result.Result := StringArray(FLit);
+      Result.Result := FLit;
       RunPostProc(Result);
     end;
   end;

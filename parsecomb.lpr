@@ -11,45 +11,54 @@ program parsecomb;
 
 uses
   //heaptrc,
-  Classes, sysutils, parsercombinators;
+  Classes, sysutils, parsercombinators, variants;
+
+
+procedure Print(V: Variant; I: Integer);
+var
+  J: Integer;
+begin
+  if VarIsArray(V) then begin
+    for J := VarArrayLowBound(V, 1) to VarArrayHighBound(V, 1) do begin
+      Print(V[J], I + 4);
+    end;
+  end
+  else begin
+    for J := 0 to I do
+      Write(' ');
+    WriteLn(V);
+  end;
+end;
 
 procedure Print(Res: TParseResult);
-var
-  S: String;
 begin
   WriteLn('Success: ', Res.Success);
   WriteLn('Position: ',  Res.Position);
   WriteLn('---------------');
-  for S in Res.Result do
-    WriteLn(S);
+  Print(Res.Result, 0);
 end;
 
 procedure ProcExpr(var R: TParseResult);
 begin
-  if Length(R.Result) = 3 then begin
+  if VarIsArray(R.Result) then begin
     // the array is [ '(', value, ')' ]
-    // remove parens and shrink array
-    R.Result[0] := R.Result[1];
-    SetLength(R.Result, 1);
+    // replace it by the value only
+    R.Result := R.Result[1];
   end;
 end;
 
 procedure ProcAdd(var R: TParseResult);
 begin
   // the array is [ 'add', a, b ]
-  // replace it with an array
-  // containing only the sum
-  R.Result[0] := IntToStr(StrToInt(R.Result[1]) + StrToInt(R.Result[2]));
-  SetLength(R.Result, 1);
+  // replace it with the sum a+b
+  R.Result := R.Result[1] + R.Result[2];
 end;
 
 procedure ProcMul(var R: TParseResult);
 begin
   // the array is [ 'mul', a, b ]
-  // replace it with an array
-  // containing only the product
-  R.Result[0] := IntToStr(StrToInt(R.Result[1]) * StrToInt(R.Result[2]));
-  SetLength(R.Result, 1);
+  // replace it with the product a*b
+  R.Result := R.Result[1] * R.Result[2];
 end;
 
 var
@@ -58,6 +67,7 @@ var
   EXPR, PARENS, INNER, MULFUNC, ADDFUNC, _PARENS: TParser;
 
 begin
+
   // there is recursion in the grammar, so we need a
   // placeholder (kind of like a forward declaration)
   _PARENS := TParser.Create;
@@ -79,16 +89,14 @@ begin
   MULFUNC.SetPostProc(@ProcMul);
 
   R := EXPR.Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1);
-  Assert(R.Success);
-  Assert(Length(R.Result) = 1);
-  Assert(R.Result[0] = '7004');
+  Print(R);
 
   repeat
     WriteLn('Type something that evals to 42 to quit');
     ReadLn(A);
     R := EXPR.Run(A, 1);
     Print(R);
-  until R.Success and (R.Result[0] = '42');
+  until R.Success and (R.Result = 42);
 
   // freeing the root of the parser tree will free all
   // contained parsers recursively, even in the presence
