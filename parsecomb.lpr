@@ -10,7 +10,7 @@ program parsecomb;
 {$mode objfpc}{$H+}
 
 uses
-  Classes, sysutils, parsercombinators;
+  heaptrc, Classes, sysutils, parsercombinators;
 
 procedure Print(Res: TParseResult);
 var
@@ -54,14 +54,12 @@ end;
 var
   A: String;
   R: TParseResult;
-  I: Integer;
-  EXPR, PARENS, INNER, MULFUNC, ADDFUNC: TParser;
-  _PARENS: TParserForwardDeclaration;
+  EXPR, PARENS, INNER, MULFUNC, ADDFUNC, _PARENS: IParser;
 
 begin
-  // there is recursion in the grammar, so we need a placeholder
-  // (kind of like a forward declaration)
-  _PARENS := TParserForwardDeclaration.Create;
+  // there is recursion in the grammar, so we need a
+  // placeholder (kind of like a forward declaration)
+  _PARENS := TParser.Create;
 
   // define the grammar
   EXPR      := Num or _PARENS;
@@ -71,13 +69,13 @@ begin
   PARENS    := Sym('(') and INNER and Sym(')');
 
   // solve the forward declaration, closing the circle
-  _PARENS.Impl := PARENS;
+  _PARENS.SetImplementation(PARENS);
 
   // some of the above parsers need to perform
   // some action, otherwise it would be boring.
-  EXPR.PostProc := @ProcExpr;
-  ADDFUNC.PostProc := @ProcAdd;
-  MULFUNC.PostProc := @ProcMul;
+  EXPR.SetPostProc(@ProcExpr);
+  ADDFUNC.SetPostProc(@ProcAdd);
+  MULFUNC.SetPostProc(@ProcMul);
 
   Print(EXPR.Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1));
   repeat
@@ -86,5 +84,10 @@ begin
     R := EXPR.Run(A, 1);
     Print(R);
   until R.Success and (R.Result[0] = '42');
+
+  // break the cyclic reference in the parser tree, otherwise
+  // the reference counting can not garbage collect most of the
+  // parsers and memory will be leaked.
+  _PARENS.SetImplementation(nil);
 end.
 
