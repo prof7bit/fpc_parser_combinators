@@ -14,10 +14,22 @@ uses
   Classes, SysUtils;
 
 type
+  TNodeType = (
+    ntEmpty,
+    ntString,
+    ntInt,
+    ntFloat,
+    ntBranch
+  );
+
   TParseResult = record
     Success: Boolean;
     Position: Integer;
-    Result: TStringArray;
+    Int: Integer;
+    Float: Double;
+    Str: String;
+    Typ: TNodeType;
+    Branch: array of TParseResult;
   end;
 
   TPostProc = procedure(var Result: TParseResult);
@@ -97,6 +109,23 @@ type
 
 implementation
 
+{ combine two results into a branch node, that is a node ot type ntBranch
+  with the contents of A and B in its leaves. If A or B is ntEmpty then it
+  will NOT make a branch, instead it will just return the other one unchanged }
+function MakeBranch(A, B: TParseResult): TParseResult;
+begin
+  if A.Typ = ntEmpty then
+    Result := B
+  else if B.Typ = ntEmpty then
+    Result := A
+  else begin
+    SetLength(Result.Branch, 2);
+    Result.Branch[0] := A;
+    Result.Branch[1] := B;
+    Result.Typ := ntBranch;
+  end;
+end;
+
 procedure TryFree(var P: TParser);
 begin
   if Assigned(P) and not P.IsDestroying then begin
@@ -135,23 +164,6 @@ begin
   Result := White and TNumberParser.Create;
 end;
 
-function StringArray(A: String): TStringArray;
-begin
-  SetLength(Result, 1);
-  Result[0] := A;
-end;
-
-function StringArray(A, B: TStringArray): TStringArray;
-var
-  I: Integer;
-begin
-  SetLength(Result, Length(A) + Length(B));
-  for I := 0 to Length(A) - 1 do
-    Result[I] := A[I];
-  for I := 0 to Length(B) - 1 do
-    Result[Length(A) + I] := B[I];
-end;
-
 { TTwoParsers }
 
 constructor TTwoParsers.Create(A, B: TParser);
@@ -181,7 +193,9 @@ begin
     Result.Success := True;
   until Result.Position > Length(Input);
   if Result.Success then begin
-    Result.Result := StringArray(Copy(Input, Position, Result.Position - Position));
+    Result.Str := Copy(Input, Position, Result.Position - Position);
+    Result.Int := StrToInt(Result.Str);
+    Result.Typ := ntInt;
     RunPostProc(Result);
   end;
 end;
@@ -194,7 +208,10 @@ begin
   if Input[Position] in ['0'..'9'] then begin
     Result.Success := True;
     Result.Position := Position + 1;
-    Result.Result := StringArray(Input[Position]);
+    Result.Str := Input[Position];
+    Result.Int := StrToInt(Result.Str);
+    Result.Typ := ntInt;
+    RunPostProc(Result);
   end;
 end;
 
@@ -209,6 +226,7 @@ begin
     Inc(Result.Position);
   until Result.Position > Length(Input);
   Result.Success := True;
+  Result.Typ := ntEmpty;
   RunPostProc(Result);
 end;
 
@@ -266,9 +284,9 @@ begin
   if RA.Success then begin
     RB := FB.Run(Input, RA.Position);
     if RB.Success then begin
-      Result.Success := True;
+      Result := MakeBranch(RA, RB);
       Result.Position := RB.Position;
-      Result.Result := StringArray(RA.Result, RB.Result);
+      Result.Success := True;
       RunPostProc(Result);
     end;
   end;
@@ -300,7 +318,8 @@ begin
     if Copy(Input, Position, Length(FLit)) = FLit then begin
       Result.Success := True;
       Result.Position := Position + Length(FLit);
-      Result.Result := StringArray(FLit);
+      Result.Typ := ntString;
+      Result.Str := FLit;
       RunPostProc(Result);
     end;
   end;
