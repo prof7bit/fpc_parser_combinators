@@ -17,14 +17,14 @@ procedure ProcExpr(var R: TParseResult);
 begin
   if R.Data.Typ = ntBranch then begin
     //DebugPrint(R);
-    { The structure of this R is
+    { The structure of this Node is
     ntBranch:
         ntBranch:
             ntString: (
             ntInt: 5
         ntString: )
 
-    replace this entire branch with only the R
+    replace this entire ntBranch with only the Node
     found between the two parenthesis }
     R.Data := R.Data.Child[0].Child[1];
   end;
@@ -33,7 +33,7 @@ end;
 procedure ProcAdd(var R: TParseResult);
 begin
   //DebugPrint(R);
-  { the structure of this R is:
+  { the structure of this Node is:
   ntBranch:
       ntBranch:
           ntString: add
@@ -50,7 +50,7 @@ end;
 procedure ProcMul(var R: TParseResult);
 begin
   //DebugPrint(R);
-  { the structure of this R is:
+  { the structure of this Node is:
   ntBranch:
       ntBranch:
           ntString: mul
