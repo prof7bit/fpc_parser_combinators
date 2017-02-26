@@ -13,71 +13,27 @@ uses
   //heaptrc,
   Classes, sysutils, parsercombinators;
 
-procedure Print(Res: TParseResult; Ind: Integer = 0);
-var
-  I: Integer;
-  R: TParseResult;
-begin
-  if Ind = 0 then begin
-    Writeln('-------------');
-    Writeln('Success: ', Res.Success);
-    Writeln('Position: ', Res.Position);
-  end;
-  for I := 0 to Ind do
-    Write(' ');
-  case Res.Typ of
-    ntEmpty: begin
-       WriteLn('ntEmpty');
-    end;
-    ntString: begin
-       WriteLn('ntString: ', Res.Str);
-    end;
-    ntInt: begin
-       WriteLn('ntInt: ', Res.Int);
-    end;
-    ntFloat: begin
-       WriteLn('ntFloat: ', Res.Float);
-    end;
-    ntBranch: begin
-       WriteLn('ntBranch:');
-       for R in Res.Branch do begin
-         Print(R, Ind + 4);
-       end;
-    end;
-  end;
-end;
-
 procedure ProcExpr(var R: TParseResult);
-var
-  R1: TParseResult;
 begin
-  if R.Typ = ntBranch then begin
-    //Print(R);
-    { The structure of this node is
+  if R.Data.Typ = ntBranch then begin
+    //DebugPrint(R);
+    { The structure of this R is
     ntBranch:
         ntBranch:
             ntString: (
             ntInt: 5
         ntString: )
 
-    replace this entire branch with only the node
+    replace this entire branch with only the R
     found between the two parenthesis }
-    R1 := R.Branch[0].Branch[1];
-
-    // fixme: isn't there a better way?
-    // why can't I just use R := R1?
-    R.Typ := R1.Typ;
-    R.Str := R1.Str;
-    R.Int := R1.Int;
-    R.Float := R1.Float;
-    R.Branch := R1.Branch;
+    R.Data := R.Data.Child[0].Child[1];
   end;
 end;
 
 procedure ProcAdd(var R: TParseResult);
 begin
-  //Print(R);
-  { the structure of this node is:
+  //DebugPrint(R);
+  { the structure of this R is:
   ntBranch:
       ntBranch:
           ntString: add
@@ -86,15 +42,15 @@ begin
 
   replace this entire ntBranch with a single
   ntInt leaf containing only the calculated result }
-  R.Int := R.Branch[0].Branch[1].Int + R.Branch[1].Int;
-  R.Typ := ntInt;
-  SetLength(R.Branch, 0);
+  R.Data.Int := R.Data.Child[0].Child[1].Int + R.Data.Child[1].Int;
+  R.Data.Typ := ntInt;
+  SetLength(R.Data.Child, 0);
 end;
 
 procedure ProcMul(var R: TParseResult);
 begin
-  //Print(R);
-  { the structure of this node is:
+  //DebugPrint(R);
+  { the structure of this R is:
   ntBranch:
       ntBranch:
           ntString: mul
@@ -103,9 +59,9 @@ begin
 
   replace this entire ntBranch with a single
   ntInt leaf containing only the calculated result }
-  R.Int := R.Branch[0].Branch[1].Int * R.Branch[1].Int;
-  R.Typ := ntInt;
-  SetLength(R.Branch, 0);
+  R.Data.Int := R.Data.Child[0].Child[1].Int * R.Data.Child[1].Int;
+  R.Data.Typ := ntInt;
+  SetLength(R.Data.Child, 0);
 end;
 
 var
@@ -136,17 +92,17 @@ begin
   MULFUNC.SetPostProc(@ProcMul);
 
   R := EXPR.Run('(mul (add (add 200 2) (mul 2 2)) 34)', 1);
-  Print(R);
+  DebugPrint(R.Data);
   Assert(R.Success);
-  Assert(R.Typ = ntInt);
-  Assert(R.Int = 7004);
+  Assert(R.Data.Typ = ntInt);
+  Assert(R.Data.Int = 7004);
 
   repeat
     WriteLn('Type something that evals to 42 to quit');
     ReadLn(A);
     R := EXPR.Run(A, 1);
-    Print(R);
-  until R.Success and (R.Typ = ntInt) and (R.Int = 42);
+    DebugPrint(R.Data);
+  until R.Success and (R.Data.Typ = ntInt) and (R.Data.Int = 42);
 
   // freeing the root of the parser tree will free all
   // contained parsers recursively, even in the presence

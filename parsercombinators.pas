@@ -22,14 +22,18 @@ type
     ntBranch
   );
 
-  TParseResult = record
-    Success: Boolean;
-    Position: Integer;
+  TNodeData = record
+    Typ: TNodeType;
     Int: Integer;
     Float: Double;
     Str: String;
-    Typ: TNodeType;
-    Branch: array of TParseResult;
+    Child: array of TNodeData;
+  end;
+
+  TParseResult = record
+    Position: Integer;
+    Success: Boolean;
+    Data: TNodeData;
   end;
 
   TPostProc = procedure(var Result: TParseResult);
@@ -107,21 +111,53 @@ type
   function Sym(S: String): TParser;
   function Num: TParser;
 
+
+  procedure DebugPrint(Data: TNodeData; Ind: Integer = 0);
+
 implementation
 
-{ combine two results into a branch node, that is a node ot type ntBranch
+procedure DebugPrint(Data: TNodeData; Ind: Integer = 0);
+var
+  I: Integer;
+  D: TNodeData;
+begin
+  for I := 0 to Ind do
+    Write(' ');
+  case Data.Typ of
+    ntEmpty: begin
+       WriteLn('ntEmpty');
+    end;
+    ntString: begin
+       WriteLn('ntString: ', Data.Str);
+    end;
+    ntInt: begin
+       WriteLn('ntInt: ', Data.Int);
+    end;
+    ntFloat: begin
+       WriteLn('ntFloat: ', Data.Float);
+    end;
+    ntBranch: begin
+       WriteLn('ntBranch:');
+       for D in Data.Child do begin
+         DebugPrint(D, Ind + 4);
+       end;
+    end;
+  end;
+end;
+
+{ combine two nodes into one branch node, that is a node of type ntBranch
   with the contents of A and B in its leaves. If A or B is ntEmpty then it
   will NOT make a branch, instead it will just return the other one unchanged }
-function MakeBranch(A, B: TParseResult): TParseResult;
+function MakeBranch(A, B: TNodeData): TNodeData;
 begin
   if A.Typ = ntEmpty then
     Result := B
   else if B.Typ = ntEmpty then
     Result := A
   else begin
-    SetLength(Result.Branch, 2);
-    Result.Branch[0] := A;
-    Result.Branch[1] := B;
+    SetLength(Result.Child, 2);
+    Result.Child[0] := A;
+    Result.Child[1] := B;
     Result.Typ := ntBranch;
   end;
 end;
@@ -193,9 +229,9 @@ begin
     Result.Success := True;
   until Result.Position > Length(Input);
   if Result.Success then begin
-    Result.Str := Copy(Input, Position, Result.Position - Position);
-    Result.Int := StrToInt(Result.Str);
-    Result.Typ := ntInt;
+    Result.Data.Str := Copy(Input, Position, Result.Position - Position);
+    Result.Data.Int := StrToInt(Result.Data.Str);
+    Result.Data.Typ := ntInt;
     RunPostProc(Result);
   end;
 end;
@@ -208,9 +244,9 @@ begin
   if Input[Position] in ['0'..'9'] then begin
     Result.Success := True;
     Result.Position := Position + 1;
-    Result.Str := Input[Position];
-    Result.Int := StrToInt(Result.Str);
-    Result.Typ := ntInt;
+    Result.Data.Str := Input[Position];
+    Result.Data.Int := StrToInt(Result.Data.Str);
+    Result.Data.Typ := ntInt;
     RunPostProc(Result);
   end;
 end;
@@ -226,7 +262,7 @@ begin
     Inc(Result.Position);
   until Result.Position > Length(Input);
   Result.Success := True;
-  Result.Typ := ntEmpty;
+  Result.Data.Typ := ntEmpty;
   RunPostProc(Result);
 end;
 
@@ -284,7 +320,7 @@ begin
   if RA.Success then begin
     RB := FB.Run(Input, RA.Position);
     if RB.Success then begin
-      Result := MakeBranch(RA, RB);
+      Result.Data := MakeBranch(RA.Data, RB.Data);
       Result.Position := RB.Position;
       Result.Success := True;
       RunPostProc(Result);
@@ -299,8 +335,9 @@ begin
   Result := FA.Run(Input, Position);
   if not Result.Success then
     Result := FB.Run(Input, Position);
-  if Result.Success then
+  if Result.Success then begin
     RunPostProc(Result);
+  end;
 end;
 
 { TLitParser }
@@ -318,8 +355,8 @@ begin
     if Copy(Input, Position, Length(FLit)) = FLit then begin
       Result.Success := True;
       Result.Position := Position + Length(FLit);
-      Result.Typ := ntString;
-      Result.Str := FLit;
+      Result.Data.Typ := ntString;
+      Result.Data.Str := FLit;
       RunPostProc(Result);
     end;
   end;
